@@ -38,6 +38,11 @@ inputs:
     description: Custom pages URL
     required: false
     default: ""
+  healthcheck:
+    description: >
+      If set to `true`, after pushing the preview to the branch, wait until the http status code returns 200.
+    required: false
+    default: false
   action:
     description: >
       Determines what this action will do when it is executed. Supported
@@ -73,12 +78,14 @@ runs:
         actionref: ${{ github.action_ref }}
         actionrepo: ${{ github.action_repository }}
         customurl: ${{ inputs.custom-url }}
+        healthcheck: ${{ inputs.healthcheck }}
         deployrepo: ${{ inputs.deploy-repository }}
         token: ${{ inputs.token }}
       run: |
         echo "action=$action" >> $GITHUB_ENV
         echo "targetdir=$umbrella/pr-$pr" >> $GITHUB_ENV
         echo "pr=$pr" >> $GITHUB_ENV
+        echo "healthcheck=$healthcheck" >> $GITHUB_ENV
 
         org=$(echo "$deployrepo" | cut -d "/" -f 1)
         thirdleveldomain=$(echo "$deployrepo" | cut -d "/" -f 2 | cut -d "." -f 1)
@@ -128,6 +135,13 @@ runs:
     - name: Expose deployment URL
       id: url
       run: echo "::set-output name=url::https://${{ env.pagesurl }}/${{ env.targetdir }}/"
+      shell: bash
+
+    - name: Health check of the environment
+      if: env.healthcheck && env.action == 'deploy' && env.deployment_status == 'success'
+      run: >-
+        ${{ github.action_path }}/lib/healthcheck.sh
+        -u ${{ steps.url.outputs.url }}
       shell: bash
 
     - name: Leave a comment after deployment
